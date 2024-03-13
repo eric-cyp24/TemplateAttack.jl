@@ -2,44 +2,108 @@
 
 
 """
-    plotdatascatter!(data::Matrix{T}; axes=[1,2], show=true, kwarg...) where T<:AbstractFloat
+    plotdatascatter!(data::AbstractMatrix; axes=[1,2], show=true, kwarg...)
 
-scatterplot of the data along the given two axes.
+Scatterplot of the data along the given two axes.
 """
-function plotdatascatter!(data::Matrix{T}; axes=[1,2], show=true, kwarg...) where T<:AbstractFloat
-    x,y = eachrow(data[axes,:])
-    scatter!(x, y; label="", markersize=1, markeralpha=0.7, markerstrokewidth=-1, color=:grey, kwarg...)
-    show && gui()
+function plotdatascatter(data::AbstractMatrix; axes=[1,2], show=true, groupdict=nothing, kwarg...)
+    plot(); plotdatascatter!(data; axes, show, groupdict, kwarg...)
 end
-
-"""
-    plotMvNormal!(mvg::MvNormal; axes=[1,2], linecolor=1, kwarg...)
-
-plot the 90%, 95%, and 99% confidence ellipse for a given Gaussian distribution.
-"""
-function plottemplate!(mvg::MvNormal; axes=[1,2], linecolor=1, kwarg...)
-    loc, cov = mvg.μ[axes], mvg.Σ[axes,axes]
-    # n_std_prob: 90%:2.146, 95%:2.448, 99%3.035, 99.5%: 3.255 (df=2)
-    covellipse!(loc,cov; n_std=2.146, linecolor, linealpha=1.0, fillalpha=0, kwarg...)
-    covellipse!(loc,cov; n_std=2.448, linecolor, linealpha=0.5, fillalpha=0, kwarg...)
-    covellipse!(loc,cov; n_std=3.035, linecolor, linealpha=0.2, fillalpha=0, kwarg...)
-    gui()
-end
-
-
-function plotTemplate!(t::Template; axes=[1,2], show=true, colors=nothing, kwarg...)
-    colors = isnothing(colors) ? (1:length(t.labels)) : colors
-    for i in 1:length(t.labels)
-        loc, cov = t.mus[i][axes], t.sigmas[i][axes,axes]
-        covellipse!(loc, cov; n_std=2.448, fillalpha=0, linealpha=1,
-                    linesidth=1, linecolor=colors[i], label=t.labels[i], kwarg...)
-        covellipse!(loc, cov; n_std=3.035, fillalpha=0, linealpha=0.5,
-                    linesidth=0.7, linecolor=colors[i], kwarg..., label="")
+function plotdatascatter!(data::AbstractMatrix; axes=[1,2], show=true, groupdict=nothing, kwarg...)
+    if isnothing(groupdict)
+        x,y = eachrow(view(data,axes,:))
+        p = scatter!(x, y; label="", markersize=1, markeralpha=0.7, markerstrokewidth=-1, color=:grey, kwarg...)
+    else
+        for (c,l) in enumerate(sort(collect(keys(groupdict))))
+            x,y = eachrow(view(data,axes,groupdict[l]))
+            p = scatter!(x, y; label="", markersize=1, markeralpha=0.7, markerstrokewidth=-1, color=c, kwarg...)
+        end
     end
     show && gui()
+    return plot!()
+end
+
+"""
+    plotmvg!(mvg::MvNormal; axes=[1,2], linecolor=1, kwarg...)
+
+Plot the 95% and 99% confidence ellipse for a given Gaussian distribution.
+"""
+function plotmvg(mvg::MvNormal; axes=[1,2], linecolor=1, kwarg...)
+    plot(); plotmvg!(mvg; axes, linecolor, kwarg...)
+end
+function plotmvg!(mvg::MvNormal; axes=[1,2], linecolor=1, kwarg...)
+    loc, cov = mvg.μ[axes], mvg.Σ[axes,axes]
+    # n_std_prob: 90%:2.146, 95%:2.448, 99%3.035, 99.5%: 3.255 (df=2)
+    #covellipse!(loc,cov; n_std=2.146, linecolor, linealpha=1.0, fillalpha=0, kwarg...)
+    covellipse!(loc,cov; n_std=2.448, linecolor, linealpha=1.0, fillalpha=0, label="", kwarg...)
+    covellipse!(loc,cov; n_std=3.035, linecolor, linealpha=0.5, fillalpha=0, label="", kwarg...)
+    gui()
+    return plot!()
+end
+
+"""
+    plotTemplate!(t::Template; axes=[1,2], show=true, colors=nothing, kwarg...)
+
+Plot all the MVG ellipse on plane `axes`
+"""
+function plotTemplate(t::Template; axes=[1,2], show=true, colors=nothing, kwarg...)
+    plot(); plotTemplate!(t; axes, show, colors, kwarg...)
+end
+function plotTemplate!(t::Template; axes=[1,2], show=true, colors=nothing, kwarg...)
+    colors = isnothing(colors) ? (1:length(t.mvgs)) : colors
+    labels = sort(collect(keys(t.mvgs)))
+    for (c,iv) in zip(colors, labels)
+        loc, cov = t.mvgs[iv].μ[axes], t.mvgs[iv].Σ[axes,axes]
+        covellipse!(loc, cov; n_std=2.448, fillalpha=0, linealpha=1,
+                    linewidth=1, linecolor=c, label=iv, kwarg...)
+        covellipse!(loc, cov; n_std=3.035, fillalpha=0, linealpha=0.5,
+                    linewidth=0.7, linecolor=c, kwarg..., label="")
+    end
+    show && gui()
+    return plot!()
 end
 
 
+"""
+"""
+function plotLDA(t::Template; num_components=4)
+   # num_components = min(num_components, ndims(t))
+end
+
+##### load/write data #########
+
+"""
+    loaddata(filename::AbstractString, datapath::AbstractString=nothing)
+
+Load from .h5 file or .npy file.
+"""
+function loaddata(filename::AbstractString; datapath=nothing)
+    if split(filename,".")[end] == "h5"
+        f = h5open(filename)
+        data = isnothing(datapath) ? read(f) : read(f,datapath)
+        close(f)
+        return data
+    elseif split(filename,".")[end] == "npy" && isnpy(filename)
+        # if file size > 2^28 ≈ 256 MB, then use memmap
+        return loadnpy(filename; memmap=filesize(filename)>2^28, numpy_order=false)
+    else
+        error("file name doesn't end with .h5 or .npy")
+    end
+end
+
+"""
+    writedata(filename::AbstractString, datapath::AbstractString, data; mode="cw")
+
+Write `data` to the given `filename` and `datapath`. 
+The default `mode="cw"` will create a new file if not existing and preserver existing content.
+Use `mode="w"` to overwrite an existing file.
+"""
+function writedata(filename::AbstractString, datapath::AbstractString, data; mode="cw")
+    filename *= split(filename,".")[end] == "h5" ? "" : ".h5"
+    f = h5open(filename, mode)
+    write(f,datapath,data)
+    close(f)
+end
 
 
 
