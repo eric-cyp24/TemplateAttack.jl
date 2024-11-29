@@ -4,6 +4,7 @@ Manifest.toml
 test/*
 data/
 figures/
+results/
 
 TODO
 Thumbs.db
