@@ -3,31 +3,46 @@ import HypothesisTests: pvalue, UnequalCovHotellingT2Test, At_Binv_A
 import Npy: loadnpy, isnpy
 using  EMAlgorithm: GaussianMixtureModel, emalgorithm_fixedweight_mprocess!
 
+"""
 function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
-                 num_epoch::Integer=200, δ=10e-9, dims=nothing, n_sample=nothing)
+                 num_epoch::Integer=200, δ=10e-9, dims=nothing, n_sample=nothing, Σscale=1)
+
+`method`=:emalg or :normalize or :tr_normalize. 
+`Σscale`= 0 -> only re-center the GMM (mvgs). 
+`Σscale`= 1 -> normalize the mean and covMatrix of the GMM (mvgs). 
+`Σscale`= 2 -> normalize GMM and expend each components' (mvg's) covMatrix. 
+"""
+function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
+                 num_epoch::Integer=200, δ=10e-9, dims=nothing, n_sample=nothing, Σscale=1)
     if method == :emalg
-        adjust_emalg!(t, traces, num_epoch; δ, dims, n_sample)
+        adjust_emalg!(t, traces, num_epoch; δ, dims, n_sample, Σscale)
     elseif method == :normalize
-        adjust_normalize!(t, traces)
+        adjust_normalize!(t, traces; Σscale)
     elseif method == :tr_normalize
         traces[:] = trace_normalize(traces, t)
     end
 end
 
 function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=50; 
-                       δ=10e-9, dims=nothing, n_sample=nothing)
-    traces = ndims(t)==size(traces,1) ? traces : t.ProjMatrix' * traces
+                       δ=10e-9, dims=nothing, n_sample=nothing, Σscale=0)
+    dims   = isnothing(dims) ? ndims(t) : dims
+    n      = isnothing(n_sample) ? (size(traces,2)÷length(t)÷2) : n_sample
+    traces = ndims(t)==size(traces,1) ? traces[1:dims,:] : t.ProjMatrix[:,1:dims]' *traces
 
     # templates to GMM models
-    dims = isnothing(dims) ? size(traces,1) : dims
-    n    = isnothing(n_sample) ? (size(traces,2)÷length(t)÷2) : n_sample
-    gmm, labels2gmmidx = templates2GMM(t;dims,n)
-    gmm = gmm + vec(mean(traces,dims=2) - t.mean)
+    t_new  = copy(t)
+    templatedimreduce!( t_new,   dims)
+    adjust_normalize!(  t_new, traces; Σscale) # 
+    gmm, labels2gmmidx = templates2GMM(t_new; dims, n)
+    print("              Number of GMM components: $(length(gmm))\r")
     
     # EM Algorithm
     llh = emalgorithm_fixedweight_mprocess!(gmm, traces, num_epoch; δ)
 
     # GMM back to templates
+    # only modify the template  when EM algorithm succeed
+    templatedimreduce!(t, dims)
+    t.mean = dropdims(mean(traces,dims=2);dims=2)
     for (l,i) in labels2gmmidx
         μ, Σ = gmm.components[i].μ, gmm.components[i].Σ
         t.mvgs[l] = MvNormal(μ,Σ)
@@ -36,18 +51,33 @@ function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=5
     return t
 end
 
-function adjust_normalize!(t::Template, traces::AbstractMatrix)
-    traces = ndims(t)==size(traces,1) ? traces : t.ProjMatrix' * traces
-    tr_mean, scale = vec(mean(traces,dims=2)), sqrt.(vec(var(traces,dims=2))./diag(t.covMatrix))
+"""
+    adjust_normalize!(t::Template, traces::AbstractMatrix; Σscale=1)
+
+`Σscale`= 0 -> only re-center the GMM (mvgs)
+`Σscale`= 1 -> normalize the mean and covMatrix of the GMM (mvgs)
+`Σscale`= 2 -> normalize GMM and expend each components' (mvg's) covMatrix
+"""
+function adjust_normalize!(t::Template, traces::AbstractMatrix; Σscale=1)
+    traces  = ndims(t)==size(traces,1) ? traces : t.ProjMatrix' * traces
+    tr_mean = dropdims(mean(traces,dims=2);dims=2)
+    scale   = Σscale==0 ? 1 : sqrt.(vec(var(traces,dims=2))./diag(t.covMatrix))
+    Σscale  = Σscale==0 ? 1 : Σscale
+    # modify the template
     for (l,mvg) in t.mvgs
-        mu = ((mvg.μ - t.mean) .* scale) + tr_mean
-        t.mvgs[l] = MvNormal(mu,t.mvgs[l].Σ)
+        mu, sig   = (((mvg.μ - t.mean) .* scale) + tr_mean), (mvg.Σ .* Σscale)
+        t.mvgs[l] = MvNormal(mu,sig)
     end
+    t.mean = tr_mean
+    return t
 end
 
-function trace_normalize(traces::AbstractMatrix, t::Template)
+function trace_normalize!(traces::AbstractMatrix, t::Template)
     tr_mean, tr_var = vec(mean(traces,dims=2)), vec(var(traces,dims=2))
-    return ((traces .- tr_mean) .* (sqrt.(t.TraceVar ./ tr_var))) .+ t.TraceMean
+    return traces[:] = @. ((traces - tr_mean) * (sqrt.(t.TraceVar / tr_var))) + t.TraceMean
+end
+function trace_normalize(traces::AbstractMatrix, t::Template)
+    return trace_normalize!(copy(traces),t)
 end
 
 ### helper functions
@@ -73,19 +103,34 @@ function templates2GMM(t::Template; dims=8, n=50, pval=5e-5)
         end
         # add mvg model in to GMM component list
         if !isnothing(mvg)
-            push!(mvgs,t.mvgs[l])
+            push!(mvgs,mvgdimreduce(t.mvgs[l],dims))
             push!(weights,p)
             labels2gmmidx[l] = length(mvgs)
         end
     end
-    println("Number of GMM components: $(length(mvgs))")
     return GaussianMixtureModel(mvgs, weights), labels2gmmidx
 end
 
-function mvgdimreduce(mvg::MvNormal,dims)
-    dims = min(length(mvg),dims)
+function mvgdimreduce(mvg::MvNormal, dims)
+    dims = min(length(mvg), dims)
     return MvNormal(mvg.μ[1:dims],mvg.Σ[1:dims,1:dims])
 end
+
+function templatedimreduce(t::Template, dims)
+    return templatedimreduce!(copy(t), dims)
+end
+function templatedimreduce!(t::Template, dims)
+    dims = min(ndims(t), dims)
+    t.ProjMatrix     = t.ProjMatrix[:,1:dims]
+    t.mean           = t.mean[1:dims]
+    t.covMatrix      = t.covMatrix[1:dims,1:dims]
+    t.pooled_cov_inv = t.pooled_cov_inv[1:dims,1:dims]
+    for (l,mvg) in t.mvgs
+        t.mvgs[l] = MvNormal(mvg.μ[1:dims],mvg.Σ[1:dims,1:dims])
+    end
+    return t
+end
+
 
 function mvgdistance(t1::MvNormal, t2::MvNormal)
     #mahalanobis(x, y, Q) = sqrt((x - y)' * Q * (x - y))
