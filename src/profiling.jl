@@ -26,14 +26,14 @@ function findPOI(IVs::AbstractVector, traces; nicv_th=nothing, traceavg=nothing)
 end
 
 """
-    expandROI(pois, trlen, roi_left, roi_right)
+    expandPOI(pois, trlen, POIe_left, POIe_right)
 
 Given selected POIs, expend to neighbouring regions
 """
-function expandROI(pois::AbstractVector, trlen, roi_left, roi_right)
+function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     pois_set = Set(pois)
     for i in pois
-        for p in i-roi_left:i+roi_right
+        for p in i-POIe_left:i+POIe_right
             0 < p ≤ trlen && push!(pois_set, p)
         end
     end
@@ -44,7 +44,7 @@ function compresstraces(traces, pois::AbstractVector, tempdir::AbstractString=TM
     # use memory map if sizeof(traces_poi) exceeds 500MB
     if isdir(dirname(tempdir)) && log2(sizeof(traces)*length(pois)/size(traces,1))>29
         print("writing to tmp...                \r")
-        tempfile = joinpath(dirname(tempdir),"TemplateAttack.jl.tmp")
+        tempfile = joinpath(dirname(tempdir), TMPFILE)
         open(tempfile,"w+") do f
             traces_poi = mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
             traces_poi[:] = view(traces,pois,:)
@@ -70,9 +70,13 @@ function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponent
 
     print(info,"finding Sw...           \r")
     T = similar(traces) # large memory allocation is slow...
-    for (i,gl) in enumerate(grouplist)  # TODO: multithreading
+    for (i,gl) in enumerate(grouplist)
         view(T,:,gl)[:] = view(traces,:,gl) .- TraceMeans[:,i]
     end
+    #grouplist = collect(grouplist)
+    #@sync Threads.@threads for i in 1:length(grouplist)  # TODO: multithreading
+    #    view(T,:,grouplist[i])[:] = view(traces,:,grouplist[i]) .- TraceMeans[:,i]
+    #end
     SW = T * T'
     T = nothing; GC.gc(); # release memory
 
@@ -109,25 +113,25 @@ function LDA(data::AbstractMatrix, labels::AbstractVector; outdim=0)
 end
 
 """
-    buildTemplate(IVs, traces; nicv_th=nothing, roi_left=40, roi_right=20, 
+    buildTemplate(IVs, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
                                numofcomponents=0, priors=:uniform, tempfile=nothing)
 
 Given the intermediate values (IVs) and traces, return the template.
 """
-function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing, roi_left=40, 
-                       roi_right=20, numofcomponents=0, priors=:uniform)
+function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing, POIe_left=0, 
+                       POIe_right=0, numofcomponents=0, priors=:uniform)
     traceavg  = vec(mean(traces,dims=2))
     tracevar  = vec( var(traces,dims=2))
     trlen     = length(traceavg)
     groupdict = groupbyval(IVs)
     
-    # find points/regions of interests (POIs/ROIs)
+    # find points of interests and extension (POIs/POIe)
     pois  = findPOI(IVs, traces; nicv_th, traceavg)
-    pois  = expandROI(pois, trlen, roi_left, roi_right)
+    pois  = expandPOI(pois, trlen, POIe_left, POIe_right)
     M_poi = sparse(Matrix(I,trlen,trlen)[:,pois])
     print("Compress traces by NICV...         \r")
     traces_poi = compresstraces(traces, pois)
-    println("POI trace length: $(length(pois))                ")
+    println("\r\e[1A\r\e[32C -> POI trace length: $(length(pois))    ")
 
     # dimension reduction using linear discriminant analysis (LDA)
     # then, project traces into LDA subspace
@@ -216,19 +220,21 @@ end
 ### build Templates
 
 """
-    runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, roi_left=40, roi_right=20, 
-                 numofcomponents=0, priors=:uniform, outfile="Templates.h5")
+    runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
+                 numofcomponents=0, priors=:uniform, outfile=nothing)
 
 Given the intermediate values (IVs) matrix and traces, run profiling and validation, and return a Vector of templates.
+`priors` = :uniform, :binomial, ::Vector or ::Dict
 """
-function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, roi_left=40, roi_right=20, 
-                      numofcomponents=0, priors=:uniform, outfile=nothing)
+function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
+                      numofcomponents=0, priors=:uniform, outfile=nothing, nvalid=nothing)
     # checking inputs
-    outfile = isdir(dirname(outfile)) ? outfile : joinpath(OUTDIR, outfile)
+    outfile     = isdir(dirname(outfile)) ? outfile : joinpath(OUTDIR, outfile)
     IVs, traces = sizecheck(IVs, traces)
 
     # split data into profiling set and validation set
-    ntr, nvalid = size(traces,2), max(1000,Int(ceil(size(traces,2)*0.02)))
+    ntr    = size(traces,2)
+    nvalid = isnothing(nvalid) ? max(1000,Int(ceil(size(traces,2)*0.02))) : Int(nvalid)
     range_p, range_v = 1:ntr-nvalid, ntr-nvalid+1:ntr
     tr_profile, tr_validate = view(traces,:,range_p), view(traces,:,range_v)
     iv_profile, iv_validate = view(   IVs,:,range_p), view(   IVs,:,range_v)
@@ -237,7 +243,7 @@ function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, roi_left=40,
     templates = Vector{Template}(undef,0)
     for (byte,ivs) in enumerate(eachrow(iv_profile))
         println("Building Templates for byte: $byte                                         ")
-        t = buildTemplate(ivs, tr_profile; nicv_th, roi_left, roi_right, 
+        t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right, 
                                            numofcomponents, priors)
         push!(templates, t)
         !isnothing(outfile) && writetemplate(outfile, t; byte)
