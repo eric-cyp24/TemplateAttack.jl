@@ -1,2 +1,10 @@
+
+Manifest.toml
+
 test/*
 data/
+figures/
+
+TODO
+Thumbs.db
+problems
