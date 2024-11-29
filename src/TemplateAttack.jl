@@ -16,7 +16,7 @@ export LDA, buildTemplate, runprofiling, validate
 
 export adjust!
 
-export match, likelihoods, key_guessing, 
+export match, likelihoods, loglikelihoods, key_guessing, 
        success_rate, guessing_entropy
 
 export plotTemplate,  plotdatascatter,  plotmvg,
