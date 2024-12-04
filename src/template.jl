@@ -88,13 +88,13 @@ function loadtemplate(filename::AbstractString; group_path="Templates/", byte=0)
 end
 
 """
-    writetemplate(filename::AbstractString, t::Template; group_path="Templates/", byte=0)
+    writetemplate(filename::AbstractString, t::Template; group_path::AbstractString="Templates/", byte=0, overwrite::Bool=false)
 
 Write template to .h5 file.
 """
-function writetemplate(filename::AbstractString, t::Template; group_path="Templates/", byte=0)
+function writetemplate(filename::AbstractString, t::Template; group_path::AbstractString="Templates/", byte=0, overwrite::Bool=false)
     template_path = joinpath(group_path,"byte $byte")
-    h5open(filename, "cw") do h5
+    h5open(filename, overwrite ? "w" : "cw") do h5
         try delete_object(h5, template_path) catch e end
         g = create_group(h5, template_path)
         idx    = sortperm(collect(keys(t.mvgs)))

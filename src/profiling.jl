@@ -246,7 +246,7 @@ function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0,
         t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right, 
                                            numofcomponents, priors)
         push!(templates, t)
-        !isnothing(outfile) && writetemplate(outfile, t; byte)
+        !isnothing(outfile) && writetemplate(outfile, t; byte, overwrite=(byte==1))
     end
     
     # validation
