@@ -1,5 +1,7 @@
-using Mmap, HDF5, TemplateAttack
+using Dates:Time,Second
+using Mmap, HDF5
 using StatsBase:sample
+using TemplateAttack
 using TemplateAttack:loaddata
 
 ### Parameters ########
