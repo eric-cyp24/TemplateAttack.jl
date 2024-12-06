@@ -115,14 +115,15 @@ function singletraceattacks(Traces::AbstractArray, tBuf::T, tX::T, tY::T, tS::T;
         for (n,trace) in enumerate(eachslice(Traces,dims=3))
             showprogress && print(" ",n," -> ")
             push!(S_guess, CBD_STA(trace, tBuf, tX, tY, tS))
-            showprogress && print(S_guess[end]==S_true[:,n] ? "O\r" : "X\r")
+            showprogress && print(S_guess[end]==view(S_true,:,n) ? "O\r" : "X\r")
         end
     end
     return stack(S_guess)
 end
 
 function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::AbstractString; resulth5overwrite::Bool=false,
-                             TracesNormalization::Bool=false, EMadjust::Bool=false, num_epoch=30, buf_epoch=5, evalGESR::Bool=true)
+                             TracesNormalization::Bool=false, EMadjust::Bool=false, num_epoch=30, buf_epoch=5, evalGESR::Bool=true,
+                             nicvth=nicvth, bufnicvth=bufnicvth, POIe_left=POIe_left, POIe_right=POIe_right)
     # load templates
     print("loading templates...            ")
     tBuf, tX, tY, tS = begin
@@ -222,7 +223,7 @@ function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::Ab
         if evalGESR
             for iv in (:Buf, :X, :Y, :S)
                 write(g, joinpath("Guessing_Entropy/",String(iv)), GEdict[iv])
-                write(g, joinpath(     "Sucess_Rate/",String(iv)), SRdict[iv])
+                write(g, joinpath(    "Success_Rate/",String(iv)), SRdict[iv])
             end
         end
     end
@@ -238,7 +239,7 @@ end
 
 ### template portability techniques ###
 
-function loadCBDTemplates(filepath::AbstractString; nicvth=0.001, bufnicvth=0.004, templatepath::AbstractString="")
+function loadCBDTemplates(filepath::AbstractString; nicvth=nicvth, bufnicvth=bufnicvth, templatepath::AbstractString="")
     if isdir(filepath)
         tbuffile = joinpath(filepath, "Templates_Buf_proc_nicv$(string(bufnicvth)[2:end])_POIe$(POIe_left)-$(POIe_right)_lanczos2.h5")
         txfile   = joinpath(filepath, "Templates_X_proc_nicv$(string(nicvth)[2:end])_POIe$(POIe_left)-$(POIe_right)_lanczos2.h5")
@@ -344,7 +345,6 @@ function main()
         Cross_Device_Attack(tplidx, tgtidx, postfix; resulth5overwrite=true,
                              TracesNormalization=false, EMadjust=false, num_epoch=30, buf_epoch=5)
         println("*************************************")
-        break
 
         # Unmodified Templates & Normalized Traces
         println("*** Unmodified Templates & Normalized Traces ***")
@@ -365,7 +365,6 @@ function main()
         println("**********************************************")
         println("#########################################################################\n\n")
         end
-        break
 
         for tplidx in devpoolsidx
         println("#### Template from ",tplidx," -> Target ",tgtidx,postfix," ####")
