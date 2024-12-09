@@ -18,7 +18,8 @@ nicv_th, buf_nicv_th  = 0.001, 0.004
 #######################
 
 
-srcDir(dev) = joinpath(TracesDIR, Dir[dev],"lanczos2_25/")
+#srcDir(dev) = joinpath(TracesDIR, Dir[dev],"lanczos2_25/")
+srcDir(dev) = joinpath(ext1TracesDIR, Dir[dev],"lanczos2_25/")
 pooledDir(devices)=joinpath("SOCKET_HPF/Pooled/Pooled_HPF/", join(sort(String.(devices)),"_")*"/")
 
 function Kyber768_profiling(INDIR, OUTDIR, Traces, X, Y, S, Buf; nvalid=nothing, 

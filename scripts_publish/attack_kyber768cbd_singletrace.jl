@@ -9,7 +9,7 @@ import EMAlgorithm
 include("Parameters.jl")
 include("../scripts/KyberCBDBP.jl")
 TracesDIR = joinpath(@__DIR__, "../data/Traces/")
-#TMPFILE   = joinpath(@__DIR__, "../data/", "TemplateAttack.jl.tmp")
+TMPFILE   = joinpath(@__DIR__, "../data/", "TemplateAttack.jl.tmp2")
 ###
 
 tplDir  = DirHPFnew
@@ -121,7 +121,7 @@ function singletraceattacks(Traces::AbstractArray, tBuf::T, tX::T, tY::T, tS::T;
     return stack(S_guess)
 end
 
-function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::AbstractString; resulth5overwrite::Bool=false,
+function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::AbstractString; resulth5overwrite::Bool=false, method=:marginalize,
                              TracesNormalization::Bool=false, EMadjust::Bool=false, num_epoch=30, buf_epoch=5, evalGESR::Bool=true,
                              nicvth=nicvth, bufnicvth=bufnicvth, POIe_left=POIe_left, POIe_right=POIe_right)
     # load templates
@@ -162,7 +162,9 @@ function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::Ab
     # create result.h5 file
     begin println("Templates from: ",TemplateDir," -> to Target: ",joinpath(tgtDir[Targetidx],"lanczos2_25$postfix/"))
     resultfile   = "$(method)_Result_with_Templates_POIe$(POIe_left)-$(POIe_right)_from_$(replace(TemplateDir,"/"=>"_")[1:end-1]).h5"
-    outfile      = joinpath(TargetDIR, resultfile)
+	OUTDIR       = joinpath(TargetDIR, "Results/Templates_POIe$(POIe_left)-$(POIe_right)/")
+	isdir(OUTDIR) || mkpath(OUTDIR)
+    outfile      = joinpath(OUTDIR, resultfile) #joinpath(TargetDIR, resultfile)
     h5resultpath = TracesNormalization ? (EMadjust ? "Traces_Normalized_Templates_Adj_EM/" : "Traces_Normalized/") :
                                          (EMadjust ? "Traces_Unmodified_Templates_Adj_EM/" : "Traces_Templates_Unmodified/")         
     println("writing result to file: ",outfile)
@@ -231,7 +233,8 @@ function Cross_Device_Attack(Templateidx::Symbol, Targetidx::Symbol, postfix::Ab
 
     println("Success Rate: ",sr,", Single-Trace Success Rate: ",sr_single_trace)
     EMadjust && print("EM adjustment: ",Time(0)+Second(floor(emadjsecs)),"\t")
-    println("Single-Trace Attack: ",Time(0)+Second(floor(attacksecs)), "\tEvaluation: ",Time(0)+Second(floor(evalsecs)),"\n")
+	print("Single-Trace Attack: ",Time(0)+Second(floor(attacksecs)),"\t")
+	println("Evaluation: ",Time(0)+Second(floor(evalsecs)),"\n")
     return 
 end
 
@@ -335,22 +338,22 @@ end
 
 function main()
 
-    newworkers = EMAlgorithm.emalg_addprocs(Sys.CPU_THREADS÷2)
+    newworkers = EMAlgorithm.emalg_addprocs(8)
     for tgtidx in deviceslist
         for tplidx in deviceslist
         println("#### Template from ",tplidx," -> Target ",tgtidx,postfix," ####")
 
         # Unmodified Templates & Traces
         println("*** Unmodified Templates & Traces ***")
-        Cross_Device_Attack(tplidx, tgtidx, postfix; resulth5overwrite=true,
+        Cross_Device_Attack(tplidx, tgtidx, postfix; method, resulth5overwrite=true,
                              TracesNormalization=false, EMadjust=false, num_epoch=30, buf_epoch=5)
-        println("*************************************")
+        println("**********************************************")
 
         # Unmodified Templates & Normalized Traces
         println("*** Unmodified Templates & Normalized Traces ***")
         Cross_Device_Attack(tplidx, tgtidx, postfix; method, resulth5overwrite=false,
                              TracesNormalization=true, EMadjust=false, num_epoch=30, buf_epoch=5)
-        println("************************************************")
+        println("**********************************************")
 
         # Adjusted Templates & Unmodified Traces
         println("*** Adjusted Templates & Unmodified Traces ***")
@@ -373,7 +376,7 @@ function main()
         println("*** Unmodified Templates & Traces ***")
         Cross_Device_Attack(tplidx, tgtidx, postfix; method, resulth5overwrite=true,
                              TracesNormalization=false, EMadjust=false, num_epoch=30, buf_epoch=5)
-        println("*************************************")
+        println("**********************************************")
 
         # Adjusted Templates & Unmodified Traces
         println("*** Adjusted Templates & Unmodified Traces ***")
@@ -384,6 +387,7 @@ function main()
         end
     end
     rmprocs(newworkers)
+	return
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
