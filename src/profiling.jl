@@ -87,12 +87,12 @@ function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponent
 
     if numofcomponents == 0
         numofcomponents = sum(delta .> 1)
-        print("\r                                                        \r")
+        print("\r                                                                    \r")
         println("Number of components: $numofcomponents           ")
     elseif numofcomponents == -1
         plot(log.(delta[1:32]),linestyle=:solid, markershape=:circle, size=(1200,800))
         gui()
-        print("\r                                                        \r")
+        print("\r                                                                    \r")
         print("Enter number of components: ")
         numofcomponents = parse(Int64, readline())
     end
