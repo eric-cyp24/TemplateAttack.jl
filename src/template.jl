@@ -50,15 +50,15 @@ end
 
 
 ### template add data ... might remove this in the future...
-function addtemplate(t::Template, label, mu, sigma)
+function addtemplate!(t::Template, label, mu, sigma)
     t.mvgs[label] = MvNormal(mu,sigma)
 end
 
-function addprior(t::Template, label, prior)
+function addprior!(t::Template, label, prior)
     t.priors[label] = prior
 end
 
-function addpooledcovMatrix(t::Template, cov_pooled=nothing)
+function addpooledcovMatrix!(t::Template, cov_pooled=nothing)
     if isnothing(cov_pooled)
         p_sum = sum(values(t.priors))
         for k in keys(t.priors) t.priors[k] /= p_sum end

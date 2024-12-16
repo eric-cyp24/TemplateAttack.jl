@@ -69,9 +69,17 @@ end
 
 
 """
+    plotLDA(t::Template; num_components=4, show=true, kwarg...)
+
+Plot LDA vectors of the template
 """
-function plotLDA(t::Template; num_components=4)
-   # num_components = min(num_components, ndims(t))
+function plotLDA(t::Template; num_components=4, show=true, kwarg...)
+    num_components = min(num_components, ndims(t))
+    tr   = plot(t.TraceMean;color=:blue)
+    ldas = [plot(view(t.ProjMatrix,:,i);color=i) for i in 1:num_components]
+    p    = plot(tr,ldas...; layout=(num_components+1,1), legend=false, size=(1600,900), kwarg...)
+    show && gui()
+    return p
 end
 
 ##### load/write data #########
@@ -82,10 +90,10 @@ end
 Load from .h5 file or .npy file.
 """
 function loaddata(filename::AbstractString; datapath=nothing)
-    if split(filename,".")[end] == "h5"
+    if split(filename,".")[end] == "h5" && HDF5.ishdf5(filename)
         return h5open(filename) do f
             if isnothing(datapath)
-                return read(f)
+                return read(f,"data")
             else
                 dset = f[datapath]
                 # if file size > 2^28 ≈ 256 MB, then use memmap
@@ -102,17 +110,17 @@ function loaddata(filename::AbstractString; datapath=nothing)
 end
 
 """
-    writedata(filename::AbstractString, datapath::AbstractString, data; mode="cw")
+    writedata(filename::AbstractString, data; datapath::AbstractString="data", overwrite::Bool=true)
 
 Write `data` to the given `filename` and `datapath`. 
-The default `mode="cw"` will create a new file if not existing and preserver existing content.
-Use `mode="w"` to overwrite an existing file.
+The default `overwrite=true` will overwrite an existing file.
+Use `overwrite=false` to create a new file if not existing and preserve existing content.
 """
-function writedata(filename::AbstractString, datapath::AbstractString, data; mode="cw")
+function writedata(filename::AbstractString, data; datapath::AbstractString="data", overwrite::Bool=true)
     filename *= split(filename,".")[end] == "h5" ? "" : ".h5"
-    f = h5open(filename, mode)
-    write(f,datapath,data)
-    close(f)
+    h5open(filename, overwrite ? "w" : "cw") do f
+        write(f,datapath,data)
+    end
 end
 
 

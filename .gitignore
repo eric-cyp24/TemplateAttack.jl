@@ -1,10 +1,13 @@
 
 Manifest.toml
 
-test/*
 data/
 figures/
+scripts/
+scripts_test/
 results/
+
+*.h5
 
 TODO
 Thumbs.db
