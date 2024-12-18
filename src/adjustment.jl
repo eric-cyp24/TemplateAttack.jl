@@ -1,7 +1,4 @@
-using  LinearAlgebra, Statistics
-import HypothesisTests: pvalue, UnequalCovHotellingT2Test, At_Binv_A
-import Npy: loadnpy, isnpy
-using  EMAlgorithm: GaussianMixtureModel, emalgorithm_fixedweight_mprocess!
+
 
 """
 function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
@@ -147,20 +144,5 @@ function UnequalCovHotellingT2Test(X::MvNormal, Y::MvNormal, n=50)
     v = trunc(Int, inv(iv))
     return UnequalCovHotellingT2Test(T2, F, nx, ny, p, v, Δ, ST)
 end
-
-
-##### testing ground #####
-
-
-
-
-
-
-
-
-
-
-
-
 
 

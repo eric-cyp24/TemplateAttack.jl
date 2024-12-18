@@ -1,12 +1,17 @@
 module TemplateAttack
 
-using StatsPlots, HDF5, Npy, Statistics, Distributions
-using LinearAlgebra, SparseArrays, Mmap, Printf
+using LinearAlgebra, SparseArrays, Mmap, Printf, Statistics
+using Plots, StatsPlots, HDF5, Distributions
+using Npy
 using LeakageAssessment: groupbyval, sizecheck, computenicv_mthread, NICV, plotNICV
 
 include("template.jl")
 include("profiling.jl")
+
+using HypothesisTests: pvalue, UnequalCovHotellingT2Test, At_Binv_A
+using EMAlgorithm: GaussianMixtureModel, emalgorithm_fixedweight_mprocess!
 include("adjustment.jl")
+
 include("evaluation.jl")
 include("utils.jl")
 
