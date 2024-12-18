@@ -5,6 +5,14 @@ using Plots, StatsPlots, HDF5, Distributions
 using Npy
 using LeakageAssessment: groupbyval, sizecheck, computenicv_mthread, NICV, plotNICV
 
+### setting TMPFILE location ###
+TMPDIR  = ispath("/local/scratch/cyp24/") ? "/local/scratch/cyp24/" : joinpath(@__DIR__, "../data/tmp/")
+TMPFILE = joinpath(TMPDIR, "TemplateAttack.jl.tmp")
+OUTDIR  = joinpath(@__DIR__, "../data/Output/")
+ispath(TMPDIR) || mkpath(TMPDIR)
+ispath(OUTDIR) || mkpath(OUTDIR)
+###
+
 include("template.jl")
 include("profiling.jl")
 

@@ -1,10 +1,4 @@
 
-###
-TMPDIR  = "/local/scratch/cyp24/"
-TMPFILE = "TemplateAttack.jl.tmp"
-OUTDIR  = "/data/Output/"
-###
-
 
 ### Template profiling
 
@@ -40,11 +34,10 @@ function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     return sort(collect(pois_set))
 end
 
-function compresstraces(traces, pois::AbstractVector, tempdir::AbstractString=TMPDIR)
+function compresstraces(traces, pois::AbstractVector, tempfile::AbstractString=TMPFILE)
     # use memory map if sizeof(traces_poi) exceeds 500MB
-    if isdir(dirname(tempdir)) && log2(sizeof(traces)*length(pois)/size(traces,1))>29
+    if log2(sizeof(traces)*length(pois)/size(traces,1))>29
         print("writing to tmp...                \r")
-        tempfile = joinpath(dirname(tempdir), TMPFILE)
         open(tempfile,"w+") do f
             traces_poi = mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
             traces_poi[:] = view(traces,pois,:)
@@ -229,8 +222,9 @@ Given the intermediate values (IVs) matrix and traces, run profiling and validat
 function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
                       numofcomponents=0, priors=:uniform, outfile=nothing, nvalid=nothing)
     # checking inputs
-    outfile     = isdir(dirname(outfile)) ? outfile : joinpath(OUTDIR, outfile)
     IVs, traces = sizecheck(IVs, traces)
+    outfile     = isnothing(outfile) ? joinpath(OUTDIR, outfile) : outfile
+    isdir(dirname(outfile)) || mkpath(dirname(outfile))
 
     # split data into profiling set and validation set
     ntr    = size(traces,2)
