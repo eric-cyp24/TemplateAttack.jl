@@ -34,18 +34,14 @@ function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     return sort(collect(pois_set))
 end
 
-function compresstraces(traces, pois::AbstractVector, tempfile::AbstractString=TMPFILE)
+function compresstraces(traces, pois::AbstractVector, tmpfile::AbstractString=TMPFILE)
     # use memory map if sizeof(traces_poi) exceeds 500MB
-    if log2(sizeof(traces)*length(pois)/size(traces,1))>29
+    if isdir(dirname(tmpfile)) && ((sizeof(traces)÷size(traces,1)*length(pois))>>29) > 0 # more than 500MB ≈ 2^29
         print("writing to tmp...                \r")
-        open(tempfile,"w+") do f
-            traces_poi = mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
-            traces_poi[:] = view(traces,pois,:)
+        return open(tmpfile,"w+") do f
+            traces_poi  = mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
+            traces_poi .= view(traces,pois,:)
         end
-        traces_poi = open(tempfile,"r") do f
-            mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
-        end
-        return traces_poi
     else
         return traces[pois,:]
     end
@@ -107,12 +103,12 @@ end
 
 """
     buildTemplate(IVs, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
-                               numofcomponents=0, priors=:uniform, tempfile=nothing)
+                               numofcomponents=0, priors=:uniform)
 
 Given the intermediate values (IVs) and traces, return the template.
 """
-function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing, POIe_left=0, 
-                       POIe_right=0, numofcomponents=0, priors=:uniform)
+function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing
+                       POIe_left=0, POIe_right=0, numofcomponents=0, priors=:uniform)
     traceavg  = vec(mean(traces,dims=2))
     tracevar  = vec( var(traces,dims=2))
     trlen     = length(traceavg)
