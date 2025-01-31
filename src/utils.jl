@@ -1,6 +1,5 @@
 
 
-
 """
     plotdatascatter!(data::AbstractMatrix; axes=[1,2], show=true, groupdict=nothing, colors=nothing, kwarg...)
 
@@ -85,27 +84,27 @@ end
 ##### load/write data #########
 
 """
-    loaddata(filename::AbstractString, datapath::AbstractString=nothing)
+    loaddata(filename::AbstractString, datapath::AbstractString="data")
 
 Load from .h5 file or .npy file.
 """
-function loaddata(filename::AbstractString; datapath=nothing)
-    if split(filename,".")[end] == "h5" && HDF5.ishdf5(filename)
-        return h5open(filename) do f
-            if isnothing(datapath)
-                return read(f,"data")
-            else
+function loaddata(filename::AbstractString; datapath="data")
+    if !isfile(filename)
+        error("$filename doesn't exist!!")
+    else
+        if split(filename,".")[end] == "h5" && HDF5.ishdf5(filename)
+            return h5open(filename) do f
                 dset = f[datapath]
                 # if file size > 2^28 ≈ 256 MB, then use memmap
                 return length(dset) > 2^28 && HDF5.ismmappable(dset) ? 
                        HDF5.readmmap(dset) : read(dset)
             end
+        elseif split(filename,".")[end] == "npy" && isnpy(filename)
+            # if file size > 2^28 ≈ 256 MB, then use memmap
+            return loadnpy(filename; memmap=filesize(filename)>2^28, numpy_order=false)
+        else
+            error("$filename is neither a .h5 nor a .npy file!!")
         end
-    elseif split(filename,".")[end] == "npy" && isnpy(filename)
-        # if file size > 2^28 ≈ 256 MB, then use memmap
-        return loadnpy(filename; memmap=filesize(filename)>2^28, numpy_order=false)
-    else
-        error("file name doesn't end with .h5 or .npy")
     end
 end
 

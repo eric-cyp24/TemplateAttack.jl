@@ -2,7 +2,7 @@
 
 """
 function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
-                 num_epoch::Integer=200, δ=10e-9, dims=nothing, n_sample=nothing, Σscale=1)
+                 num_epoch::Integer=200, δ=10e-9, dims=0, n_sample=0, Σscale=1)
 
 `method`=:emalg or :normalize or :tr_normalize. 
 `Σscale`= 0 -> only re-center the GMM (mvgs). 
@@ -10,7 +10,7 @@ function adjust!(t::Template, traces::AbstractMatrix; method=:emalg,
 `Σscale`= 2 -> normalize GMM and expend each components' (mvg's) covMatrix. 
 """
 function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
-                 num_epoch::Integer=200, δ=10e-9, dims=nothing, n_sample=nothing, Σscale=1)
+                 num_epoch::Integer=200, δ=10e-9, dims=0, n_sample=0, Σscale=1)
     if method == :emalg
         adjust_emalg!(t, traces, num_epoch; δ, dims, n_sample, Σscale)
     elseif method == :normalize
@@ -21,9 +21,9 @@ function adjust!(t::Template, traces::AbstractMatrix; method=:emalg,
 end
 
 function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=50; 
-                       δ=10e-9, dims=nothing, n_sample=nothing, Σscale=0)
-    dims   = isnothing(dims) ? ndims(t) : dims
-    n      = isnothing(n_sample) ? (size(traces,2)÷length(t)÷2) : n_sample
+                       δ=10e-9, dims=0, n_sample=0, Σscale=0)
+    dims   = dims==0 ? ndims(t) : dims
+    n      = n_sample==0 ? (size(traces,2)÷length(t)÷4) : n_sample
     traces = ndims(t)==size(traces,1) ? traces[1:dims,:] : t.ProjMatrix[:,1:dims]' *traces
 
     # templates to GMM models
@@ -79,29 +79,29 @@ end
 
 ### helper functions
 
-function templates2GMM(t::Template; dims=8, n=50, pval=5e-5)
+function templates2GMM(t::Template; dims=0, n=50, pval=5e-3)
+    dims    = dims==0 ? ndims(t) : dims
     labels  = sort(collect(keys(t.mvgs)))
     mvgs    = Vector{MvNormal}()
     weights = Vector{Float64}()
     labels2gmmidx = Dict()
     for l in labels
-        mvg,p = mvgdimreduce(t.mvgs[l],dims), t.priors[l]
+        mvg, p = mvgdimreduce(t.mvgs[l],dims), t.priors[l]
+        merged = false
         # check if the mvg is the same as any of the privious one
         # point to the old one if match else, create a new mvg
         for (i,m) in enumerate(mvgs)
-            m = mvgdimreduce(m,dims)
-            mvg_nodiff = pvalue(UnequalCovHotellingT2Test(m, mvg, n)) > pval
-            if m.μ == mvg.μ || mvg_nodiff
+            merged = pvalue(UnequalCovHotellingT2Test(m, mvg, n)) > pval
+            if merged
                 weights[i] += p
-                mvg = nothing
                 labels2gmmidx[l] = i
                 break
             end
         end
         # add mvg model in to GMM component list
-        if !isnothing(mvg)
-            push!(mvgs,mvgdimreduce(t.mvgs[l],dims))
-            push!(weights,p)
+        if !merged
+            push!(mvgs, mvg)
+            push!(weights, p)
             labels2gmmidx[l] = length(mvgs)
         end
     end
@@ -110,7 +110,7 @@ end
 
 function mvgdimreduce(mvg::MvNormal, dims)
     dims = min(length(mvg), dims)
-    return MvNormal(mvg.μ[1:dims],mvg.Σ[1:dims,1:dims])
+    return MvNormal(mvg.μ[1:dims], mvg.Σ[1:dims,1:dims])
 end
 
 function templatedimreduce(t::Template, dims)
@@ -123,7 +123,7 @@ function templatedimreduce!(t::Template, dims)
     t.covMatrix      = t.covMatrix[1:dims,1:dims]
     t.pooled_cov_inv = t.pooled_cov_inv[1:dims,1:dims]
     for (l,mvg) in t.mvgs
-        t.mvgs[l] = MvNormal(mvg.μ[1:dims],mvg.Σ[1:dims,1:dims])
+        t.mvgs[l] = MvNormal(mvg.μ[1:dims], mvg.Σ[1:dims,1:dims])
     end
     return t
 end
