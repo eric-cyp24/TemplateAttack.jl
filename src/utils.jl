@@ -86,7 +86,7 @@ end
 """
     loaddata(filename::AbstractString, datapath::AbstractString="data")
 
-Load from .h5 file or .npy file.
+Load from .h5 file.
 """
 function loaddata(filename::AbstractString; datapath="data")
     if !isfile(filename)
@@ -99,11 +99,8 @@ function loaddata(filename::AbstractString; datapath="data")
                 return length(dset) > 2^28 && HDF5.ismmappable(dset) ? 
                        HDF5.readmmap(dset) : read(dset)
             end
-        elseif split(filename,".")[end] == "npy" && isnpy(filename)
-            # if file size > 2^28 ≈ 256 MB, then use memmap
-            return loadnpy(filename; memmap=filesize(filename)>2^28, numpy_order=false)
         else
-            error("$filename is neither a .h5 nor a .npy file!!")
+            error("$filename is neither a .h5 file!!")
         end
     end
 end

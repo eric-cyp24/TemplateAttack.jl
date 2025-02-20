@@ -7,10 +7,10 @@ function parse_commandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
         "labels"
-            help = "intermediate values (.npy file)"
+            help = "intermediate values (.h5 file)"
             required = true
         "traces"
-            help = "traces (.npy file)"
+            help = "traces (.h5 file)"
             required = true
         "--outdir"
             default = "Templates/"

@@ -2,7 +2,6 @@ module TemplateAttack
 
 using LinearAlgebra, SparseArrays, Mmap, Printf, Statistics
 using Plots, StatsPlots, HDF5, Distributions
-using Npy
 using LeakageAssessment: groupbyval, sizecheck, computenicv_mthread, NICV, plotNICV
 
 ### setting TMPFILE location ###
