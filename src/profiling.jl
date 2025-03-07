@@ -232,7 +232,7 @@ function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0,
     # profiling
     templates = Vector{Template}(undef,0)
     for (byte,ivs) in enumerate(eachrow(iv_profile))
-        println("Building Templates for byte: $byte                                         ")
+        println("Building Templates for byte: $byte/$(size(IVs,1))                                         ")
         t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right, 
                                            numofcomponents, priors)
         push!(templates, t)
