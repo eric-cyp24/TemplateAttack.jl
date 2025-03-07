@@ -120,7 +120,7 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     M_poi = sparse(Matrix(I,trlen,trlen)[:,pois])
     print("Compress traces by NICV...         \r")
     traces_poi = compresstraces(traces, pois)
-    println("\r\e[1A\r\e[32C -> POI trace length: $(length(pois))    ")
+    println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    ")
 
     # dimension reduction using linear discriminant analysis (LDA)
     # then, project traces into LDA subspace
