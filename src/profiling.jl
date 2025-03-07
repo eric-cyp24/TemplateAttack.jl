@@ -58,15 +58,20 @@ function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponent
     SB = T * T'
 
     print(info,"finding Sw...           \r")
-    T = similar(traces) # large memory allocation is slow...
-    for (i,gl) in enumerate(grouplist)
-        view(T,:,gl)[:] = view(traces,:,gl) .- TraceMeans[:,i]
+    if Sys.total_memory()/2^30 < 20     # for computer with less than 20GB of RAM
+        SW = zeros(eltype(traces),size(traces,1),size(traces,1))
+        for (i,gl) in enumerate(grouplist)
+            T = view(traces,:,gl) .- view(TraceMeans,:,i)
+            LinearAlgebra.BLAS.syrk!('U','N',true,T,true,SW)
+        end
+        SW = Symmetric(SW)
+    else
+        T = similar(traces) # large memory allocation is slow...
+        for (i,gl) in enumerate(grouplist)      # TODO: multithreading
+            T[:,gl] = view(traces,:,gl) .- view(TraceMeans,:,i)
+        end
+        SW = T * T'
     end
-    #grouplist = collect(grouplist)
-    #@sync Threads.@threads for i in 1:length(grouplist)  # TODO: multithreading
-    #    view(T,:,grouplist[i])[:] = view(traces,:,grouplist[i]) .- TraceMeans[:,i]
-    #end
-    SW = T * T'
     T = nothing; GC.gc(); # release memory
 
     print(info,"Eigenvalue Decomposition...")
