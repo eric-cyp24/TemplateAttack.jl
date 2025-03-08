@@ -51,28 +51,23 @@ function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponent
     info = "Linear Discriminant Analysis...   "
     TracesMean = vec(mean(traces,dims=2))
     TraceMeans = stack([vec(mean(view(traces,:,gl), dims=2)) for gl in grouplist])
+    TT = eltype(traces)
 
     print(info,"finding Sb...       \r")
-    Nt = sqrt.([length(gl) for gl in grouplist])'
-    T = (TraceMeans .- TracesMean) .* Nt
-    SB = T * T'
+    SB = zeros(TT,size(traces,1),size(traces,1))
+    for (gl,t) in zip(grouplist, eachcol(TraceMeans.-TracesMean))
+        LinearAlgebra.BLAS.syr!('U',TT(length(gl)),t,SB)
+    end
+    SB = Symmetric(SB)
 
     print(info,"finding Sw...           \r")
-    if Sys.total_memory()/2^30 < 20     # for computer with less than 20GB of RAM
-        SW = zeros(eltype(traces),size(traces,1),size(traces,1))
-        for (i,gl) in enumerate(grouplist)
-            T = view(traces,:,gl) .- view(TraceMeans,:,i)
-            LinearAlgebra.BLAS.syrk!('U','N',true,T,true,SW)
-        end
-        SW = Symmetric(SW)
-    else
-        T = similar(traces) # large memory allocation is slow...
-        for (i,gl) in enumerate(grouplist)      # TODO: multithreading
-            T[:,gl] = view(traces,:,gl) .- view(TraceMeans,:,i)
-        end
-        SW = T * T'
+    SW = zeros(TT,size(traces,1),size(traces,1))
+    for (i,gl) in enumerate(grouplist)
+        T = view(traces,:,gl) .- view(TraceMeans,:,i)
+        LinearAlgebra.BLAS.syrk!('U','N',true,T,true,SW)
     end
-    T = nothing; GC.gc(); # release memory
+    SW = Symmetric(SW)
+    T  = nothing; GC.gc(); # release memory
 
     print(info,"Eigenvalue Decomposition...")
     delta, U = eigen(SB, SW)
@@ -93,7 +88,7 @@ function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponent
     numofcomponents = min(numofcomponents, length(grouplist)-1)
 
     delta, U = delta[1:numofcomponents], U[:,1:numofcomponents]
-    return U
+    return Matrix{Float64}(U)
 
 end
 
@@ -107,7 +102,7 @@ function LDA(data::AbstractMatrix, labels::AbstractVector; outdim=0)
 end
 
 """
-    buildTemplate(IVs, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
+    buildTemplate(IVs, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
                                numofcomponents=0, priors=:uniform)
 
 Given the intermediate values (IVs) and traces, return the template.
@@ -118,11 +113,11 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     tracevar  = vec( var(traces,dims=2))
     trlen     = length(traceavg)
     groupdict = groupbyval(IVs)
-    
+
     # find points of interests and extension (POIs/POIe)
     pois  = findPOI(IVs, traces; nicv_th, traceavg)
     pois  = expandPOI(pois, trlen, POIe_left, POIe_right)
-    M_poi = sparse(Matrix(I,trlen,trlen)[:,pois])
+    M_poi = sparse(Matrix{Float64}(I,trlen,trlen)[:,pois])
     print("Compress traces by NICV...         \r")
     traces_poi = compresstraces(traces, pois)
     println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    ")
@@ -148,11 +143,13 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
         d = Binomial(length(labels)-1,0.5)
         priors = Dict(Int16(l)=>p for (l,p) in zip(labels,pdf(d,support(d))))
     elseif priors isa Vector
+        length(labels) == lenegth(priors) || error("length of `priors::Vector` doesn't match `labels`")
         priors = Dict(Int16(l)=>p for (l,p) in zip(labels,priors))
     elseif priors isa Dict
+        sort(collect(keys(priors))) == labels || error("keys of `priors::Dict` doesn't match `labels`")
         priors = priors
-    else
-        priors = Dict(Int16(l)=>1.0/length(labels) for l in labels )
+    else # unknown prior, compute based on IV's distribution
+        priors = Dict(Int16(l)=>length(groupdict[labels])/length(IVs) for l in labels )
     end
 
     # compute pooled covariance matrix (from data)
@@ -200,8 +197,8 @@ function validate(t::Template, traces, IVs; show::Bool=false)
     end
     sr_1storder = mean(Ranks .== 1)     # first order success rate
     rank_stats  = mean(Ranks), median(Ranks), findmax(Ranks)[1] # (mean, median max)
-    pr_stats    = mean(PRs),   median(PRs),   findmax(PRs)[1]   
-    
+    pr_stats    = mean(PRs),   median(PRs),   findmax(PRs)[1]
+
     if show
         @printf("Success Rate: %.2f%% |", sr_1storder*100)
         @printf("Ranking(median, max): (%.1f, %2i) |", rank_stats[2:3]...)
@@ -214,13 +211,13 @@ end
 ### build Templates
 
 """
-    runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
+    runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
                  numofcomponents=0, priors=:uniform, outfile=nothing)
 
 Given the intermediate values (IVs) matrix and traces, run profiling and validation, and return a Vector of templates.
 `priors` = :uniform, :binomial, ::Vector or ::Dict
 """
-function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0, 
+function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
                       numofcomponents=0, priors=:uniform, outfile=nothing, nvalid=nothing)
     # checking inputs
     IVs, traces = sizecheck(IVs, traces)
@@ -233,17 +230,17 @@ function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0,
     range_p, range_v = 1:ntr-nvalid, ntr-nvalid+1:ntr
     tr_profile, tr_validate = view(traces,:,range_p), view(traces,:,range_v)
     iv_profile, iv_validate = view(   IVs,:,range_p), view(   IVs,:,range_v)
-    
+
     # profiling
     templates = Vector{Template}(undef,0)
     for (byte,ivs) in enumerate(eachrow(iv_profile))
         println("Building Templates for byte: $byte/$(size(IVs,1))                                         ")
-        t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right, 
+        t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right,
                                            numofcomponents, priors)
         push!(templates, t)
         !isnothing(outfile) && writetemplate(outfile, t; byte, overwrite=(byte==1))
     end
-    
+
     # validation
     for (byte,ivs) in enumerate(eachrow(iv_validate))
         @printf("byte: %2i -> ", byte)
