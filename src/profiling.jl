@@ -128,7 +128,8 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     U = LDA_projection_matrix(traces_poi, values(groupdict), numofcomponents)
     print("Projecting Traces onto LDA subspace...")
     print("                                    \r")
-    traces_lda  = U' * traces_poi
+    traces_lda  = Matrix{Float64}(undef, size(U,2), size(traces_poi,2))
+    LinearAlgebra.mul!(traces_lda, transpose(U), traces_poi); traces_poi = nothing; GC.gc()
     tr_lda_mean = vec(mean(traces_lda,dims=2))
     tr_lda_covM = cov(traces_lda, dims=2)
 
