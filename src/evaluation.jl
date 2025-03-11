@@ -13,7 +13,7 @@ function match(t::Template, trace::AbstractVector)
 end
 
 function match_pooled_cov(t::Template, trace::AbstractVector; uselogpdf::Bool=false)
-    trace    = ndims(t)==size(traces,1) ? trace : t.ProjMatrix' * trace
+    trace    = ndims(t)==size(traces,1) ? trace : LinearAlgebra.mul!(Vector{Float64}(undef, ndims(t)), transpose(t.ProjMatrix), trace)
     d        = trace .- stack(t.mus)
     logprobs = -0.5*(transpose(d)*t.pooled_cov_inv*d)
     if uselogpdf
@@ -44,17 +44,18 @@ end
     likelihoods(t::Template,  trace::AbstractVector; normalized::Bool=true)
     likelihoods(t::Template, traces::AbstractMatrix; normalized::Bool=true)
 
-Given template and trace(s), return the Vector/Matrix of likelihoods 
+Given template and trace(s), return the Vector/Matrix of likelihoods
 with the order of sorted template labels.
 """
 function likelihoods(t::Template, trace::AbstractVector; normalized::Bool=true)
-    trace = ndims(t)==size(trace,1) ? trace : t.ProjMatrix' * trace
+    trace = ndims(t)==size(trace,1) ? trace : LinearAlgebra.mul!(Vector{Float64}(undef, ndims(t)), transpose(t.ProjMatrix), trace)
     lhs = [t.priors[k]*pdf(t.mvgs[k],trace) for k in sort(collect(keys(t.mvgs)))]
     return normalized ? lhs / sum(lhs) : lhs
 end
 function likelihoods(t::Template, traces::AbstractMatrix; normalized::Bool=true)
     labels = sort(collect(keys(t.mvgs)))
-    traces = ndims(t)==size(traces,1) ? traces : t.ProjMatrix' * traces
+    traces = ndims(t)==size(traces,1) ? traces :
+             LinearAlgebra.mul!(Matrix{Float64}(undef, ndims(t), size(traces,2)), transpose(t.ProjMatrix), traces)
     lhs = Matrix{Float64}(undef,length(labels),size(traces)[2])
     for (i,l) in enumerate(labels)
         lhs[i,:] = t.priors[l]*pdf(t.mvgs[l],traces)
@@ -63,13 +64,14 @@ function likelihoods(t::Template, traces::AbstractMatrix; normalized::Bool=true)
 end
 
 function loglikelihoods(t::Template, trace::AbstractVector)
-    trace = ndims(t)==size(traces,1) ? trace : t.ProjMatrix' * trace
+    trace = ndims(t)==size(traces,1) ? trace : LinearAlgebra.mul!(Vector{Float64}(undef, ndims(t)), transpose(t.ProjMatrix), trace)
     lhs = [log(t.priors[k])*logpdf(t.mvgs[k],trace) for k in sort(collect(keys(t.mvgs)))]
     return lhs
 end
 function loglikelihoods(t::Template, traces::AbstractMatrix)
     labels = sort(collect(keys(t.mvgs)))
-    traces = ndims(t)==size(traces,1) ? traces : t.ProjMatrix' * traces
+    traces = ndims(t)==size(traces,1) ? traces :
+             LinearAlgebra.mul!(Matrix{Float64}(undef, ndims(t), size(traces,2)), transpose(t.ProjMatrix), traces)
     lhs = Matrix{Float64}(undef,length(labels),size(traces)[2])
     for (i,l) in enumerate(labels)
         lhs[i,:] = log(t.priors[l])*logpdf(t.mvgs[l],traces)
