@@ -1,15 +1,15 @@
 
 
 """
-function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
+function adjust!(t::Template, traces::AbstractMatrix; method=:emalg,
                  num_epoch::Integer=200, δ=10e-9, dims=0, n_sample=0, Σscale=1)
 
-`method`=:emalg or :normalize or :tr_normalize. 
-`Σscale`= 0 -> only re-center the GMM (mvgs). 
-`Σscale`= 1 -> normalize the mean and covMatrix of the GMM (mvgs). 
-`Σscale`= 2 -> normalize GMM and expend each components' (mvg's) covMatrix. 
+`method`=:emalg or :normalize or :tr_normalize.
+`Σscale`= 0 -> only re-center the GMM (mvgs).
+`Σscale`= 1 -> normalize the mean and covMatrix of the GMM (mvgs).
+`Σscale`= 2 -> normalize GMM and expend each components' (mvg's) covMatrix.
 """
-function adjust!(t::Template, traces::AbstractMatrix; method=:emalg, 
+function adjust!(t::Template, traces::AbstractMatrix; method=:emalg,
                  num_epoch::Integer=200, δ=10e-9, dims=0, n_sample=0, Σscale=1)
     if method == :emalg
         adjust_emalg!(t, traces, num_epoch; δ, dims, n_sample, Σscale)
@@ -20,19 +20,20 @@ function adjust!(t::Template, traces::AbstractMatrix; method=:emalg,
     end
 end
 
-function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=50; 
+function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=50;
                        δ=10e-9, dims=0, n_sample=0, Σscale=0)
     dims   = dims==0 ? ndims(t) : dims
     n      = n_sample==0 ? (size(traces,2)÷length(t)÷4) : n_sample
-    traces = ndims(t)==size(traces,1) ? traces[1:dims,:] : t.ProjMatrix[:,1:dims]' *traces
+    traces = ndims(t)==size(traces,1) ? view(traces,1:dims,:) :
+             LinearAlgebra.mul!(Matrix{Float64}(undef, dims, size(traces,2)), transpose(view(t.ProjMatrix,:,1:dims)), traces)
 
     # templates to GMM models
     t_new  = copy(t)
     templatedimreduce!( t_new,   dims)
-    adjust_normalize!(  t_new, traces; Σscale) # 
+    adjust_normalize!(  t_new, traces; Σscale) #
     gmm, labels2gmmidx = templates2GMM(t_new; dims, n)
     print("              Number of GMM components: $(length(gmm))\r")
-    
+
     # EM Algorithm
     llh = emalgorithm_fixedweight_mprocess!(gmm, traces, num_epoch; δ)
 
@@ -44,7 +45,7 @@ function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=5
         μ, Σ = gmm.components[i].μ, gmm.components[i].Σ
         t.mvgs[l] = MvNormal(μ,Σ)
     end
-    
+
     return t
 end
 
