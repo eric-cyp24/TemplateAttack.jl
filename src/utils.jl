@@ -94,9 +94,10 @@ function loaddata(filename::AbstractString; datapath="data")
     else
         if split(filename,".")[end] == "h5" && HDF5.ishdf5(filename)
             return h5open(filename) do f
-                dset = f[datapath]
+                dset  = f[datapath]
+                dsize = length(dset)*sizeof(HDF5.get_jl_type(dset))
                 # if file size > 2^28 ≈ 256 MB, then use memmap
-                return length(dset) > 2^28 && HDF5.ismmappable(dset) ? 
+                return dsize > 2^28 && HDF5.ismmappable(dset) ?
                        HDF5.readmmap(dset) : read(dset)
             end
         else
@@ -108,7 +109,7 @@ end
 """
     writedata(filename::AbstractString, data; datapath::AbstractString="data", overwrite::Bool=true)
 
-Write `data` to the given `filename` and `datapath`. 
+Write `data` to the given `filename` and `datapath`.
 The default `overwrite=true` will overwrite an existing file.
 Use `overwrite=false` to create a new file if not existing and preserve existing content.
 """
