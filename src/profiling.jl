@@ -34,14 +34,15 @@ function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     return sort(collect(pois_set))
 end
 
-function compresstraces(traces, pois::AbstractVector, tmpfile::AbstractString=TMPFILE)
-    # use memory map if sizeof(traces_poi) exceeds 500MB
-    if isdir(dirname(tmpfile)) && ((sizeof(traces)÷size(traces,1)*length(pois))>>29) > 0 # more than 500MB ≈ 2^29
+function compresstraces(traces, pois::AbstractVector; memmap::Bool=true, TMPFILE::AbstractString=TMPFILE)
+    if memmap
         print("writing to tmp...                \r")
-        return open(tmpfile,"w+") do f
-            traces_poi  = mmap(f, Matrix{eltype(traces)}, (length(pois),size(traces,2)))
-            traces_poi .= view(traces,pois,:)
-        end
+        fname, f = isdir(dirname(TMPFILE)) ? (TMPFILE, open(TMPFILE, "w+")) : mktemp()
+        dtype, dsize = Matrix{eltype(traces)}, (length(pois),size(traces,2))
+        traces_poi   = mmap(f, dtype, dsize)
+        traces_poi  .= view(traces,pois,:)
+        close(f)
+        return open(fname) do f mmap(f, dtype, dsize) end
     else
         return traces[pois,:]
     end
@@ -119,7 +120,10 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     pois  = expandPOI(pois, trlen, POIe_left, POIe_right)
     M_poi = sparse(Matrix{Float64}(I,trlen,trlen)[:,pois])
     print("Compress traces by NICV...         \r")
-    traces_poi = compresstraces(traces, pois)
+    #memmap = Sys.free_memory() < sizeof(Traces)  # if system is HDD
+    # use memory map if sizeof(traces_poi) exceeds 500MB
+    memmap = (sizeof(traces)÷size(traces,1)*length(pois)) > 2^29 # 2^29 ≈ 500MB
+    traces_poi = compresstraces(traces, pois; memmap)
     println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    ")
 
     # dimension reduction using linear discriminant analysis (LDA)
@@ -213,10 +217,11 @@ end
 
 """
     runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
-                 numofcomponents=0, priors=:uniform, outfile=nothing)
+                 numofcomponents=0, priors=:uniform, outfile=nothing, nvalid=nothing)
 
 Given the intermediate values (IVs) matrix and traces, run profiling and validation, and return a Vector of templates.
-`priors` = :uniform, :binomial, ::Vector or ::Dict
+`priors` = :uniform, :binomial, ::Vector or ::Dict.
+`nvalid` set the number of traces for validation, default is 2% of the total traces.
 """
 function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
                       numofcomponents=0, priors=:uniform, outfile=nothing, nvalid=nothing)
