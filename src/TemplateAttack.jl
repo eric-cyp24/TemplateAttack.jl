@@ -5,9 +5,10 @@ using Plots, StatsPlots, HDF5, Distributions
 using LeakageAssessment: groupbyval, sizecheck, computenicv_mthread, NICV, plotNICV
 
 ### setting TMPFILE location ###
-TMPDIR  = ispath("/local/scratch/cyp24/") ? "/local/scratch/cyp24/" : joinpath(@__DIR__, "../data/tmp/")
+TMPDIR  = ispath("/local/scratch/cyp24/") ? "/local/scratch/cyp24/jl_tmp/" :
+                                            normpath(joinpath(@__DIR__, "../data/tmp/"))
 TMPFILE = joinpath(TMPDIR, "TemplateAttack.jl.tmp")
-OUTDIR  = joinpath(@__DIR__, "../data/Output/")
+OUTDIR  = normpath(joinpath(@__DIR__, "../data/Output/"))
 ispath(TMPDIR) || mkpath(TMPDIR)
 ispath(OUTDIR) || mkpath(OUTDIR)
 ###
@@ -28,7 +29,7 @@ export LDA, buildTemplate, runprofiling, validate
 
 export adjust!
 
-export match, likelihoods, loglikelihoods, key_guessing, 
+export match, likelihoods, loglikelihoods, key_guessing,
        success_rate, guessing_entropy
 
 export plotTemplate,  plotdatascatter,  plotmvg,
