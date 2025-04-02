@@ -74,7 +74,7 @@ templatefields = ("TraceMean", "TraceVar", "ProjMatrix", "mean", "covMatrix",
                   "labels", "mus", "sigmas", "priors", "pooled_cov_inv")
 
 """
-    loadtemplate(filename::AbstractString; group_path="Templates/" byte=0)
+    loadtemplate(filename::AbstractString; group_path="Templates/", byte=0)
 
 Load template from .h5 file.
 """
