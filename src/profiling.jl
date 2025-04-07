@@ -9,7 +9,7 @@ use NICV to find POIs, by setting a NICV threshold.
 """
 function findPOI(IVs::AbstractVector, traces; nicv_th=nothing, traceavg=nothing)
     traceavg = isnothing(traceavg) ? view(traces,:,1:50) : traceavg
-    print("Calculating NICV...                       \r")
+    print("\rCalculating NICV...\e[K\r")
     nicv = NICV(IVs, traces) # TODO: use lower level NICV calculation
     if isnothing(nicv_th)
         plotNICV(nicv, traceavg)
@@ -36,7 +36,7 @@ end
 
 function compresstraces(traces, pois::AbstractVector; memmap::Bool=true, TMPFILE::AbstractString=TMPFILE)
     if memmap
-        print("writing to tmp...                \r")
+        print("\rwriting to tmp...\e[K\r")
         fname, f = isdir(dirname(TMPFILE)) ? (TMPFILE, open(TMPFILE, "w+")) : mktemp()
         dtype, dsize = Matrix{eltype(traces)}, (length(pois),size(traces,2))
         traces_poi   = mmap(f, dtype, dsize)
@@ -48,42 +48,39 @@ function compresstraces(traces, pois::AbstractVector; memmap::Bool=true, TMPFILE
     end
 end
 
-function LDA_projection_matrix(traces::AbstractMatrix, grouplist, numofcomponents=0)
-    info = "Linear Discriminant Analysis...   "
+function LDA_projection_matrix(traces::Matrix{TT}, grouplist, numofcomponents=0) where {TT}
+    info(msg) = print("\rLinear Discriminant Analysis...   ",msg,"\e[K")
     TracesMean = vec(mean(traces,dims=2))
     TraceMeans = stack([vec(mean(view(traces,:,gl), dims=2)) for gl in grouplist])
-    TT = eltype(traces)
 
-    print(info,"finding Sb...       \r")
+    info("finding Sb...")
     SB = zeros(TT,size(traces,1),size(traces,1))
     for (gl,t) in zip(grouplist, eachcol(TraceMeans.-TracesMean))
         LinearAlgebra.BLAS.syr!('U',TT(length(gl)),t,SB)
     end
-    SB = Symmetric(SB)
+    SB = Symmetric(SB) # syrk!("U",...) return only upper triangle
 
-    print(info,"finding Sw...           \r")
+    info("finding Sw...")
     SW = zeros(TT,size(traces,1),size(traces,1))
     for (i,gl) in enumerate(grouplist)
         T = view(traces,:,gl) .- view(TraceMeans,:,i)
         LinearAlgebra.BLAS.syrk!('U','N',true,T,true,SW)
     end
     SW = Symmetric(SW)
-    T  = nothing; GC.gc(); # release memory
+    GC.gc(); # release memory
 
-    print(info,"Eigenvalue Decomposition...")
+    info("Eigenvalue Decomposition...")
     delta, U = eigen(SB, SW)
-    print("Done!!               \r")
+    info("Eigenvalue Decomposition...    Done!!");print("\r")
     delta, U = reverse(delta), reverse(U,dims=2)
 
     if numofcomponents == 0
         numofcomponents = sum(delta .> 1)
-        print("\r                                                                    \r")
-        println("Number of components: $numofcomponents           ")
+        println("\r\e[K\rNumber of components: $numofcomponents \e[K")
     elseif numofcomponents == -1
         plot(log.(delta[1:32]),linestyle=:solid, markershape=:circle, size=(1200,800))
         gui()
-        print("\r                                                                    \r")
-        print("Enter number of components: ")
+        print("\r\e[K\rEnter number of components: ")
         numofcomponents = parse(Int64, readline())
     end
     numofcomponents = min(numofcomponents, length(grouplist)-1)
@@ -119,26 +116,25 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     pois  = findPOI(IVs, traces; nicv_th, traceavg)
     pois  = expandPOI(pois, trlen, POIe_left, POIe_right)
     M_poi = sparse(Matrix{Float64}(I,trlen,trlen)[:,pois])
-    print("Compress traces by NICV...         \r")
+    print("\rCompress traces by NICV... \e[K")
     #memmap = Sys.free_memory() < sizeof(Traces)  # if system is HDD
     # use memory map if sizeof(traces_poi) exceeds 500MB
     memmap = (sizeof(traces)÷size(traces,1)*length(pois)) > 2^29 # 2^29 ≈ 500MB
     traces_poi = compresstraces(traces, pois; memmap)
-    println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    ")
+    println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    \e[K")
 
     # dimension reduction using linear discriminant analysis (LDA)
     # then, project traces into LDA subspace
-    print("Linear Discriminant Analysis...                             \r")
+    print("\rLinear Discriminant Analysis... \e[K")
     U = LDA_projection_matrix(traces_poi, values(groupdict), numofcomponents)
-    print("Projecting Traces onto LDA subspace...")
-    print("                                    \r")
+    print("\rProjecting Traces onto LDA subspace... \e[K")
     traces_lda  = Matrix{Float64}(undef, size(U,2), size(traces_poi,2))
     LinearAlgebra.mul!(traces_lda, transpose(U), traces_poi); traces_poi = nothing; GC.gc()
     tr_lda_mean = vec(mean(traces_lda,dims=2))
     tr_lda_covM = cov(traces_lda, dims=2)
 
     # build MVG models for each indermedate value
-    print("Building Multivariate Gaussian Models...                    \r")
+    print("\rBuilding Multivariate Gaussian Models... \e[K")
     mvgs = Dict(Int16(l)=>MvNormal(vec(mean(traces_lda[:,gl],dims=2)),
                                         cov(traces_lda[:,gl],dims=2)) for (l,gl) in groupdict)
     labels = sort(collect(keys(groupdict)))
@@ -158,7 +154,7 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     end
 
     # compute pooled covariance matrix (from data)
-    print("Calculating pooled covariance Matrix...                     \r")
+    print("\rCalculating pooled covariance Matrix... \e[K\r")
     for (l,gl) in groupdict
         view(traces_lda,:,gl) .-= mvgs[l].μ
     end
