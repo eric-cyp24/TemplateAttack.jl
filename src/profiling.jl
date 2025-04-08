@@ -24,21 +24,39 @@ end
 
 Given selected POIs, expend to neighbouring regions
 """
-function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
+function expandPOI2(pois::AbstractVector, trlen, POIe_left, POIe_right)
     pois_set = Set(pois)
     for i in pois
         for p in i-POIe_left:i+POIe_right
             0 < p ≤ trlen && push!(pois_set, p)
         end
     end
-    return sort(collect(pois_set))
+    return sort!(collect(pois_set))
+end
+
+function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
+    (p,state) = iterate(sort(pois))
+    poie = typeof(pois)(undef, 0);
+    i = 1
+    while i <= trlen
+        if i < p-POIe_left i = p-POIe_left end
+        append!(poie,i:min(trlen,p+POIe_right))
+        i = poie[end]+1
+        next = iterate(pois,state)
+        if isnothing(next)
+            return poie
+        else
+            (p,state) = next
+        end
+    end
+    return poie
 end
 
 function compresstraces(traces, pois::AbstractVector; memmap::Bool=true, TMPFILE::AbstractString=TMPFILE)
     if memmap
         print("\rwriting to tmp...\e[K\r")
         fname, f = isdir(dirname(TMPFILE)) ? (TMPFILE, open(TMPFILE, "w+")) : mktemp()
-        dtype, dsize = Matrix{eltype(traces)}, (length(pois),size(traces,2))
+        dtype, dsize = typeof(traces), (length(pois),size(traces,2))
         traces_poi   = mmap(f, dtype, dsize)
         traces_poi  .= view(traces,pois,:)
         close(f)
@@ -58,7 +76,7 @@ function LDA_projection_matrix(traces::Matrix{TT}, grouplist, numofcomponents=0)
     for (gl,t) in zip(grouplist, eachcol(TraceMeans.-TracesMean))
         LinearAlgebra.BLAS.syr!('U',TT(length(gl)),t,SB)
     end
-    SB = Symmetric(SB) # syrk!("U",...) return only upper triangle
+    SB = Symmetric(SB) # syrk!('U',...) return only upper triangle
 
     info("finding Sw...")
     SW = zeros(TT,size(traces,1),size(traces,1))
@@ -71,6 +89,7 @@ function LDA_projection_matrix(traces::Matrix{TT}, grouplist, numofcomponents=0)
 
     info("Eigenvalue Decomposition...")
     delta, U = eigen(SB, SW)
+    @assert all(isreal.(delta)) #&& all(delta .>= 0)
     info("Eigenvalue Decomposition...    Done!!");print("\r")
     delta, U = reverse(delta), reverse(U,dims=2)
 
@@ -101,12 +120,12 @@ end
 
 """
     buildTemplate(IVs, traces; nicv_th=nothing, POIe_left=0, POIe_right=0,
-                               numofcomponents=0, priors=:uniform)
+                               numofcomponents=0, priors=:uniform, printPOIlen=false)
 
 Given the intermediate values (IVs) and traces, return the template.
 """
 function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing,
-                       POIe_left=0, POIe_right=0, numofcomponents=0, priors=:uniform)
+                       POIe_left=0, POIe_right=0, numofcomponents=0, priors=:uniform, printPOIlen=false)
     traceavg  = vec(mean(traces,dims=2))
     tracevar  = vec( var(traces,dims=2))
     trlen     = length(traceavg)
@@ -121,7 +140,7 @@ function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=noth
     # use memory map if sizeof(traces_poi) exceeds 500MB
     memmap = (sizeof(traces)÷size(traces,1)*length(pois)) > 2^29 # 2^29 ≈ 500MB
     traces_poi = compresstraces(traces, pois; memmap)
-    println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    \e[K")
+    printPOIlen && println("\r\e[1A\r\e[36C -> POI trace length: $(length(pois))    \e[K")
 
     # dimension reduction using linear discriminant analysis (LDA)
     # then, project traces into LDA subspace
@@ -236,9 +255,9 @@ function runprofiling(IVs::AbstractMatrix, traces; nicv_th=nothing, POIe_left=0,
     # profiling
     templates = Vector{Template}(undef,0)
     for (byte,ivs) in enumerate(eachrow(iv_profile))
-        println("Building Templates for byte: $byte/$(size(IVs,1))                                         ")
+        println("Building Templates for byte: $byte/$(size(IVs,1)) \e[K")
         t = buildTemplate(ivs, tr_profile; nicv_th, POIe_left, POIe_right,
-                                           numofcomponents, priors)
+                                           numofcomponents, priors, printPOIlen=true)
         push!(templates, t)
         !isnothing(outfile) && writetemplate(outfile, t; byte, overwrite=(byte==1))
     end
