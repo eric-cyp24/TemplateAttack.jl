@@ -24,16 +24,6 @@ end
 
 Given selected POIs, expend to neighbouring regions
 """
-function expandPOI2(pois::AbstractVector, trlen, POIe_left, POIe_right)
-    pois_set = Set(pois)
-    for i in pois
-        for p in i-POIe_left:i+POIe_right
-            0 < p ≤ trlen && push!(pois_set, p)
-        end
-    end
-    return sort!(collect(pois_set))
-end
-
 function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     (p,state) = iterate(sort(pois))
     poie = typeof(pois)(undef, 0);
@@ -52,11 +42,21 @@ function expandPOI(pois::AbstractVector, trlen, POIe_left, POIe_right)
     return poie
 end
 
-function compresstraces(traces, pois::AbstractVector; memmap::Bool=true, TMPFILE::AbstractString=TMPFILE)
+function expandPOI2(pois::AbstractVector, trlen, POIe_left, POIe_right)
+    pois_set = Set(pois)
+    for i in pois
+        for p in i-POIe_left:i+POIe_right
+            0 < p ≤ trlen && push!(pois_set, p)
+        end
+    end
+    return sort!(collect(pois_set))
+end
+
+function compresstraces(traces::AbstractMatrix{T}, pois::AbstractVector; memmap::Bool=true, TMPFILE::AbstractString=TMPFILE) where {T}
     if memmap
         print("\rwriting to tmp...\e[K\r")
         fname, f = isdir(dirname(TMPFILE)) ? (TMPFILE, open(TMPFILE, "w+")) : mktemp()
-        dtype, dsize = typeof(traces), (length(pois),size(traces,2))
+        dtype, dsize = Matrix{T}, (length(pois),size(traces,2))
         traces_poi   = mmap(f, dtype, dsize)
         traces_poi  .= view(traces,pois,:)
         close(f)
@@ -74,7 +74,7 @@ function LDA_projection_matrix(traces::Matrix{TT}, grouplist, numofcomponents=0)
     info("finding Sb...")
     SB = zeros(TT,size(traces,1),size(traces,1))
     for (gl,t) in zip(grouplist, eachcol(TraceMeans.-TracesMean))
-        LinearAlgebra.BLAS.syr!('U',TT(length(gl)),t,SB)
+        LinearAlgebra.BLAS.syr!('U',TT(length(gl)),t,SB) # syr!(,alpha,x,) needs to be of same (el)type
     end
     SB = Symmetric(SB) # syrk!('U',...) return only upper triangle
 
