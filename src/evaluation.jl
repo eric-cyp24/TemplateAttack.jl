@@ -56,7 +56,7 @@ function likelihoods(t::Template, traces::AbstractMatrix; normalized::Bool=true)
     labels = sort(collect(keys(t.mvgs)))
     traces = ndims(t)==size(traces,1) ? traces :
              LinearAlgebra.mul!(Matrix{Float64}(undef, ndims(t), size(traces,2)), transpose(t.ProjMatrix), traces)
-    lhs = Matrix{Float64}(undef,length(labels),size(traces)[2])
+    lhs = Matrix{Float64}(undef,length(labels),size(traces,2))
     for (i,l) in enumerate(labels)
         lhs[i,:] = t.priors[l]*pdf(t.mvgs[l],traces)
     end
@@ -64,8 +64,8 @@ function likelihoods(t::Template, traces::AbstractMatrix; normalized::Bool=true)
 end
 
 function loglikelihoods(t::Template, trace::AbstractVector)
-    trace = ndims(t)==size(traces,1) ? trace : LinearAlgebra.mul!(Vector{Float64}(undef, ndims(t)), transpose(t.ProjMatrix), trace)
-    lhs = [log(t.priors[k])*logpdf(t.mvgs[k],trace) for k in sort(collect(keys(t.mvgs)))]
+    trace = ndims(t)==size(trace,1) ? trace : LinearAlgebra.mul!(Vector{Float64}(undef, ndims(t)), transpose(t.ProjMatrix), trace)
+    lhs = [log(t.priors[k])+logpdf(t.mvgs[k],trace) for k in sort(collect(keys(t.mvgs)))]
     return lhs
 end
 function loglikelihoods(t::Template, traces::AbstractMatrix)
@@ -74,7 +74,7 @@ function loglikelihoods(t::Template, traces::AbstractMatrix)
              LinearAlgebra.mul!(Matrix{Float64}(undef, ndims(t), size(traces,2)), transpose(t.ProjMatrix), traces)
     lhs = Matrix{Float64}(undef,length(labels),size(traces)[2])
     for (i,l) in enumerate(labels)
-        lhs[i,:] = log(t.priors[l])*logpdf(t.mvgs[l],traces)
+        lhs[i,:] = log(t.priors[l])+logpdf(t.mvgs[l],traces)
     end
     return lhs
 end

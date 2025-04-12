@@ -5,8 +5,7 @@ using Plots, StatsPlots, HDF5, Distributions
 using LeakageAssessment: groupbyval, sizecheck, computenicv_mthread, NICV, plotNICV
 
 ### setting TMPFILE location ###
-TMPDIR  = ispath("/local/scratch/cyp24/") ? "/local/scratch/cyp24/jl_tmp/" :
-                                            normpath(joinpath(@__DIR__, "../data/tmp/"))
+TMPDIR  = get(ENV, "JULIA_LOCAL_TMP", normpath(joinpath(@__DIR__, "../data/tmp/")))
 TMPFILE = joinpath(TMPDIR, "TemplateAttack.jl.tmp")
 OUTDIR  = normpath(joinpath(@__DIR__, "../data/Output/"))
 ispath(TMPDIR) || mkpath(TMPDIR)
