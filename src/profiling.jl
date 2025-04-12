@@ -107,7 +107,7 @@ end
 
 Given the intermediate values (IVs) and traces, return the template.
 """
-function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing
+function buildTemplate(IVs::AbstractVector, traces::AbstractMatrix; nicv_th=nothing,
                        POIe_left=0, POIe_right=0, numofcomponents=0, priors=:uniform)
     traceavg  = vec(mean(traces,dims=2))
     tracevar  = vec( var(traces,dims=2))
