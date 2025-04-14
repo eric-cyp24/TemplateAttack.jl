@@ -16,15 +16,15 @@ mutable struct Template
     function Template(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, mvgs, priors, pooled_cov_inv)
         new(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, mvgs, priors, pooled_cov_inv)
     end
-    
+
     function Template(TraceMean, TraceVar, ProjMatrix, mean, covMatrix)
         mvgs = Dict{Int16, Distributions.FullNormal}()
         priors = Dict{Int16, Float64}()
-        pooled_cov_inv = Matrix{Float64}() 
+        pooled_cov_inv = Matrix{Float64}()
         new(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, mvgs, priors, pooled_cov_inv)
     end
-    
-    function Template(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, labels, mus::Matrix{T}, 
+
+    function Template(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, labels, mus::Matrix{T},
                       sigmas::Array{T,3}, priors, pooled_cov_inv=nothing) where T<:AbstractFloat
         ProjMatrix = size(ProjMatrix)[1] == length(TraceMean) ? ProjMatrix : Array(ProjMatrix')
         mvgs   = Dict(labels[i]=>MvNormal(mus[:,i],sigmas[:,:,i]) for i in 1:length(labels))

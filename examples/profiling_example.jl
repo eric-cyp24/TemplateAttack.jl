@@ -57,7 +57,7 @@ function main()
     templatefilename = "Templates_"*splitext(basename(args["labels"]))[1]*"_nicv$(string(nicv_th)[2:end])_POIe$(POIe_left)-$(POIe_right).h5"
     outfile = joinpath(OUTDIR, templatefilename)
     println("writing template file: $outfile")
-    
+
     # run profiling
     println("profiling...        ")
     Templates = runprofiling(IVs, Traces; nicv_th, POIe_left, POIe_right, numofcomponents, outfile)
