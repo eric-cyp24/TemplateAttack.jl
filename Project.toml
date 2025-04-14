@@ -1,6 +1,6 @@
 name = "TemplateAttack"
 uuid = "80af35ab-4a10-4ad7-a3f0-c5528baba6c8"
-authors = ["cyp24 "]
+authors = ["Eric Peng <cyp24@cl.cam.ac.uk>"]
 version = "0.1.0"
 
 [deps]
