@@ -60,14 +60,18 @@ function adjust_normalize!(t::Template, traces::AbstractMatrix; Σscale=1)
     traces  = ndims(t)==size(traces,1) ? traces :
               LinearAlgebra.mul!(Matrix{Float64}(undef, dims, size(traces,2)), transpose(t.ProjMatrix), traces)
     tr_mean = dropdims(mean(traces,dims=2);dims=2)
-    scale   = Σscale==0 ? 1 : sqrt.(vec(var(traces,dims=2)) ./ diag(t.covMatrix)) # in each LDA vector space
+    tr_std  = dropdims( std(traces,dims=2);dims=2)
+    gmm     = GaussianMixtureModel(collect(values(t.mvgs)), collect(values(t.priors)))
+    t_mean  = mean(gmm)
+    t_std   = sqrt.(diag(cov(gmm)))
+    scale   = Σscale==0 ? 1 : tr_std ./ t_std # in each LDA vector space
     Σscale  = Σscale==0 ? 1 : Σscale
     # modify the template
     for (l,mvg) in t.mvgs
-        mu, sig   = (((mvg.μ - t.mean) .* scale) + tr_mean), (mvg.Σ .* Σscale)
+        mu        = (((mvg.μ - t_mean) .* scale) + tr_mean)
+        sig       = Σscale*(mvg.Σ .* (scale*scale'))
         t.mvgs[l] = MvNormal(mu,sig)
     end
-    t.mean = tr_mean
     return t
 end
 
@@ -81,7 +85,7 @@ end
 
 ### helper functions
 
-function templates2GMM(t::Template; dims=8, n=50, pval=5e-5)
+function templates2GMM(t::Template; dims=0, n=50, pval=5e-3)
     dims    = dims==0 ? ndims(t) : dims
     labels  = sort(collect(keys(t.mvgs)))
     mvgs    = Vector{MvNormal}()
