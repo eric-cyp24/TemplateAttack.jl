@@ -49,6 +49,35 @@ function adjust_emalg!(t::Template, traces::AbstractMatrix, num_epoch::Integer=5
     return t
 end
 
+function adjust_emalg_nonfixedweight!(t::Template, traces::AbstractMatrix, num_epoch::Integer=50;
+                       δ=10e-9, dims=0, n_sample=0, Σscale=0)
+    dims   = dims==0 ? ndims(t) : dims
+    n      = n_sample==0 ? (size(traces,2)÷length(t)÷2) : n_sample
+    traces = ndims(t)==size(traces,1) ? view(traces,1:dims,:) :
+             LinearAlgebra.mul!(Matrix{Float64}(undef, dims, size(traces,2)), transpose(view(t.ProjMatrix,:,1:dims)), traces)
+
+    # templates to GMM models
+    t_new  = copy(t)
+    templatedimreduce!( t_new,   dims)
+    adjust_normalize!(  t_new, traces; Σscale) #
+    gmm, labels2gmmidx = templates2GMM(t_new; dims, n)
+    print("              Number of GMM components: $(length(gmm))\r")
+
+    # EM Algorithm
+    llh = emalgorithm!(gmm, traces, num_epoch; δ)
+
+    # GMM back to templates
+    # only modify the template  when EM algorithm succeed
+    templatedimreduce!(t, dims)
+    t.mean = dropdims(mean(traces,dims=2);dims=2)
+    for (l,i) in labels2gmmidx
+        μ, Σ = gmm.components[i].μ, gmm.components[i].Σ
+        t.mvgs[l] = MvNormal(μ,Σ)
+    end
+
+    return t
+end
+
 """
     adjust_normalize!(t::Template, traces::AbstractMatrix; Σscale=1)
 
@@ -58,7 +87,7 @@ end
 """
 function adjust_normalize!(t::Template, traces::AbstractMatrix; Σscale=1)
     traces  = ndims(t)==size(traces,1) ? traces :
-              LinearAlgebra.mul!(Matrix{Float64}(undef, dims, size(traces,2)), transpose(t.ProjMatrix), traces)
+    LinearAlgebra.mul!(Matrix{Float64}(undef, ndims(t), size(traces,2)), transpose(t.ProjMatrix), traces)
     tr_mean = dropdims(mean(traces,dims=2);dims=2)
     tr_std  = dropdims( std(traces,dims=2);dims=2)
     gmm     = GaussianMixtureModel(collect(values(t.mvgs)), collect(values(t.priors)))
