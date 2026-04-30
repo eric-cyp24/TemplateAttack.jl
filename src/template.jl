@@ -20,7 +20,7 @@ mutable struct Template
     function Template(TraceMean, TraceVar, ProjMatrix, mean, covMatrix)
         mvgs = Dict{Int16, Distributions.FullNormal}()
         priors = Dict{Int16, Float64}()
-        pooled_cov_inv = Matrix{Float64}()
+        pooled_cov_inv = zeros(Float64,0,0) #Matrix{Float64}()
         new(TraceMean, TraceVar, ProjMatrix, mean, covMatrix, mvgs, priors, pooled_cov_inv)
     end
 

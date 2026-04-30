@@ -94,10 +94,10 @@ function LDA_projection_matrix(traces::Matrix{TT}, grouplist, numofcomponents=0)
     delta, U = reverse(delta), reverse(U,dims=2)
 
     if numofcomponents == 0
-        numofcomponents = sum(delta .> 1)
+        numofcomponents = sum(delta .> 0.01)
         println("\r\e[K\rNumber of components: $numofcomponents \e[K")
     elseif numofcomponents == -1
-        plot(log.(delta[1:32]),linestyle=:solid, markershape=:circle, size=(1200,800))
+        plot(log.(delta[1:min(32,length(delta))]),linestyle=:solid, markershape=:circle, size=(1200,800))
         gui()
         print("\r\e[K\rEnter number of components: ")
         numofcomponents = parse(Int64, readline())

@@ -15,8 +15,10 @@ ispath(OUTDIR) || mkpath(OUTDIR)
 include("template.jl")
 include("profiling.jl")
 
-using HypothesisTests: pvalue, UnequalCovHotellingT2Test, At_Binv_A
+using HypothesisTests: pvalue, At_Binv_A
 using EMAlgorithm: GaussianMixtureModel, emalgorithm_fixedweight_mprocess!
+using EMAlgorithm: emalgorithm!
+import HypothesisTests: UnequalCovHotellingT2Test
 include("adjustment.jl")
 
 include("evaluation.jl")
